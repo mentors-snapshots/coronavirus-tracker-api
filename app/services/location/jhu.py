@@ -100,7 +100,7 @@ async def get_category(category):
                 "country_code": countries.country_code(country),
                 "province": item["Province/State"],
                 "coordinates": {
-                    "lat": item["Lat"], 
+                    "lat": item["Lat"],
                     "long": item["Long"],
                 },
                 "history": history,
@@ -206,13 +206,24 @@ async def get_locations():
     return locations
 
 
-def parse_history(key: tuple, locations: list):
+def parse_history(key: tuple, locations: list, index: int = None):
     """
     Helper for validating and extracting history content from
     locations data based on key. Validates with the current country/province
     key to make sure no index/column issue.
     """
 
+    # If index is provided, try to get location at that index first
+    if index is not None:
+        try:
+            location = locations[index]
+            if (location["country"], location["province"]) == key:
+                return location["history"]
+            return {}  # Key doesn't match at specified index
+        except IndexError:
+            return {}  # Index out of range
+
+    # Only search through all locations if no index was provided
     for i, location in enumerate(locations):
         if (location["country"], location["province"]) == key:
             return location["history"]
