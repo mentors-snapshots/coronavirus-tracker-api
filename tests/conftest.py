@@ -10,7 +10,8 @@ import pytest
 from async_asgi_testclient import TestClient as AsyncTestClient
 from fastapi.testclient import TestClient
 
-from app.main import APP
+# Import test app instead of main app to avoid monitoring dependencies
+from tests.test_config import app as APP
 from app.utils import httputils
 
 try:

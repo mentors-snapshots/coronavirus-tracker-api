@@ -1,10 +1,28 @@
 """Tests for geographic clustering analysis features."""
 import pytest
+import numpy as np
 from datetime import datetime, timedelta
 
 from app.utils import geo, analysis, visualization
-from app.models import Location
 
+# Mock the folium module to avoid web dependencies
+class MockMap:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def add_to(self, *args, **kwargs):
+        return self
+
+class MockHeatMap:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def add_to(self, *args, **kwargs):
+        return self
+
+# Patch folium for testing
+visualization.folium.Map = MockMap
+visualization.plugins.HeatMap = MockHeatMap
 
 def test_haversine_distance():
     """Test distance calculation between coordinates."""
@@ -89,9 +107,9 @@ def test_heatmap_generation():
     # Test with default center
     m = visualization.create_heatmap(locations)
     assert m is not None
-    assert isinstance(m, visualization.folium.Map)
+    assert isinstance(m, MockMap)
 
     # Test with custom center
     m = visualization.create_heatmap(locations, center_lat=0, center_lon=0)
     assert m is not None
-    assert isinstance(m, visualization.folium.Map)
+    assert isinstance(m, MockMap)
