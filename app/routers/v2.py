@@ -1,10 +1,13 @@
 """app.routers.v2"""
 import enum
+import tempfile
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Query
 
 from ..data import DATA_SOURCES
 from ..models import LatestResponse, LocationResponse, LocationsResponse
+from ..utils import geo, analysis, visualization
 
 V2 = APIRouter()
 
@@ -109,3 +112,90 @@ async def sources():
     Retrieves a list of data-sources that are availble to use.
     """
     return {"sources": list(DATA_SOURCES.keys())}
+
+
+@V2.get("/clusters")
+async def get_clusters(
+    request: Request,
+    min_cases: int = Query(5, ge=5),
+    radius_km: int = Query(100, ge=1),
+):
+    """Get location clusters using DBSCAN algorithm.
+
+    Args:
+        min_cases: Minimum number of cases for a location to be considered (min: 5)
+        radius_km: Maximum distance between points in same cluster (min: 1)
+    """
+    locations = await request.state.source.get_all()
+
+    # Filter locations with minimum cases
+    locations = [loc for loc in locations if loc.latest.confirmed >= min_cases]
+
+    if not locations:
+        raise HTTPException(404, detail="No locations found with specified minimum cases")
+
+    # Perform clustering
+    labels = geo.dbscan_cluster(locations, eps_km=radius_km, min_samples=min_cases)
+
+    # Group locations by cluster
+    clusters = {}
+    for loc, label in zip(locations, labels):
+        if label >= 0:  # Ignore noise points (-1)
+            if label not in clusters:
+                clusters[label] = []
+            clusters[label].append(loc.serialize(timelines=False))
+
+    return {"clusters": clusters}
+
+
+@V2.get("/spread-vectors")
+async def get_spread_vectors(
+    request: Request,
+    days: int = Query(14, ge=1),
+):
+    """Calculate spread vectors using historical data.
+
+    Args:
+        days: Number of days to analyze (min: 1, default: 14)
+    """
+    locations = await request.state.source.get_all()
+
+    vectors = {}
+    for loc in locations:
+        vector = analysis.calculate_spread_vector(loc, days=days)
+        if vector:
+            vectors[loc.id] = {
+                "location": loc.serialize(timelines=False),
+                "vector": vector
+            }
+
+    if not vectors:
+        raise HTTPException(404, detail="No spread vectors could be calculated with specified parameters")
+
+    return {"spread_vectors": vectors}
+
+
+@V2.get("/heatmap")
+async def get_heatmap(
+    request: Request,
+    center_lat: Optional[float] = Query(None),
+    center_lon: Optional[float] = Query(None),
+):
+    """Generate heatmap visualization of COVID-19 cases.
+
+    Args:
+        center_lat: Optional latitude for map center
+        center_lon: Optional longitude for map center
+    """
+    locations = await request.state.source.get_all()
+
+    if not locations:
+        raise HTTPException(404, detail="No location data available")
+
+    # Create heatmap
+    m = visualization.create_heatmap(locations, center_lat, center_lon)
+
+    # Save to temporary file
+    with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as f:
+        m.save(f.name)
+        return {"heatmap_path": f.name}
