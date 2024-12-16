@@ -49,3 +49,7 @@ watchgod==0.7
 websockets==8.1
 wrapt==1.12.1
 yarl==1.6.3; python_version >= '3.6'
+
+# Geographic clustering dependencies
+scikit-learn>=0.24.0
+folium>=0.12.0
